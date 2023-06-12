@@ -1,0 +1,184 @@
+#include <Wire.h> 
+#include <LCD_I2C.h>
+LCD_I2C lcd(0x27);
+#include <EEPROM.h>
+#include "GravityTDS.h"
+ #define ph A0
+ 
+#define measurePin A2 
+#define ledPower 7   
+int samplingTime = 280; 
+int deltaTime = 40; 
+int sleepTime = 9680;
+float voMeasured = 0;
+float calcVoltage = 0;
+int dustDensity = 0;
+
+
+ int sensorPin = A1;
+float volt;
+int ntu,phv,f1,tdsValue = 0;
+#define TdsSensorPin A3
+GravityTDS gravityTds;
+#define float1 4 
+float temperature = 25;
+unsigned int m=0,act=0,val;
+String inputString = ""; 
+unsigned char a[200];
+void setup()
+{
+    Serial.begin(9600);
+    Wire.begin(); // gpio 2 and gpio 0 which are D4, and D3
+pinMode(ph,INPUT);
+pinMode(ledPower,OUTPUT);
+pinMode(float1,INPUT_PULLUP);
+gravityTds.setPin(TdsSensorPin);
+    gravityTds.setAref(5.0);  //reference voltage on ADC, default 5.0V on Arduino UNO
+    gravityTds.setAdcRange(1024);  //1024 for 10bit ADC;4096 for 12bit ADC
+    gravityTds.begin(); 
+  lcd.begin();                 //Init the LCD
+  lcd.backlight();            //Activate backlight     
+  lcd.home();  
+  lcd.setCursor(0,0);lcd.print("WATER");
+  lcd.setCursor(3,1);lcd.print(" POLLUTION");
+  delay(3000);
+lcd.clear();
+}
+ 
+void loop()
+{
+  while(Serial.available())
+    {
+        char data;
+        data=Serial.read();
+  
+        a[m]=data;
+          if(a[0] == '*')
+          {
+            if(m<=3)
+            {m++;}
+          }
+      }
+      if(m > 1)
+      {
+        val = (a[1]-0x30)*100 + (a[2]-0x30)*10  + (a[3] - 0x30);
+        m=0;
+      }
+    volt = 0;
+    for(int i=0; i<800; i++)
+    {
+        volt += ((float)analogRead(sensorPin)/1023)*5;
+    }
+    volt = volt/800;
+    volt = round_to_dp(volt,2);
+    if(volt < 2.5){
+      ntu = 3000;
+    }else{
+      ntu = -1120.4*square(volt)+5742.3*volt-4353.8; 
+    }
+         lcd.setCursor(0,0);lcd.print("T:");
+     if(ntu <= 9){lcd.print("000");lcd.print(ntu);}
+  else if(ntu <= 99){lcd.print("00");lcd.print(ntu);}
+  else if(ntu <= 999){lcd.print("0");lcd.print(ntu);}
+   else if(ntu <= 9999){lcd.print(ntu);}
+
+    gravityTds.setTemperature(temperature);  // set the temperature and execute temperature compensation
+    gravityTds.update();  //sample and calculate
+    tdsValue = gravityTds.getTdsValue();
+    lcd.setCursor(7,0);lcd.print("TD:");
+    
+    if(tdsValue<= 9){lcd.print("00");lcd.print(tdsValue);}
+    else if(tdsValue <= 99){lcd.print("0");lcd.print(tdsValue);}
+    else if(tdsValue <= 999){lcd.print(tdsValue);}
+
+    
+   phv=analogRead(ph);
+   Serial.print("ph:");
+   Serial.println(phv);
+   phv=map(phv,0,55,14,0);
+   lcd.setCursor(0,1);lcd.print("p:");
+   if(phv>=14){phv=14;}
+   else if(phv<=0){phv=0;}
+     if(phv <= 9){lcd.print("0");lcd.print(phv);}
+  else if(phv <= 99){lcd.print(phv);}
+
+    lcd.setCursor(5,1);lcd.print("G:");
+   
+     if(val <= 9){lcd.print("0");lcd.print(val);}
+    else if(val <= 99){lcd.print(val);}
+  if(val>50)
+  {
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("GAS LEAKED");
+    lcd.setCursor(0,1);
+  lcd.print("     ");
+  delay(1000);
+  lcd.clear();
+  }
+
+    digitalWrite(ledPower,LOW); // power on the LED
+  delayMicroseconds(samplingTime);
+  voMeasured = analogRead(measurePin); // read the dust value
+ delayMicroseconds(deltaTime);
+digitalWrite(ledPower,HIGH); // turn the LED off
+delayMicroseconds(sleepTime);
+ calcVoltage = voMeasured * (5.0 / 1024.0);
+  dustDensity = 170 * calcVoltage - 0.1;
+
+   lcd.setCursor(10,1);lcd.print("D:");
+    
+    if(dustDensity<= 9){lcd.print("00");lcd.print(dustDensity);}
+    else if(dustDensity <= 99){lcd.print("0");lcd.print(dustDensity);}
+    else if(dustDensity <= 999){lcd.print(dustDensity);}
+  
+ if(digitalRead(float1)==HIGH)
+{
+  f1=1;
+   lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("WATER LEVEL");
+    lcd.setCursor(0,1);
+  lcd.print(" HIGH    ");
+  delay(1000);
+  lcd.clear();
+}
+else{ f1=0;}
+
+ Serial.print("f1:");
+  Serial.println(f1);
+  sendata();
+    delay(1000);
+}
+float round_to_dp( float in_value, int decimal_place )
+{
+  float multiplier = powf( 10.0f, decimal_place );
+  in_value = roundf( in_value * multiplier ) / multiplier;
+  return in_value;
+}
+void sendata()
+{
+   Serial.print('*');
+   
+   if(ntu <= 9){Serial.print("000");Serial.print(ntu);}
+  else if(ntu <= 99){Serial.print("00");Serial.print(ntu);}
+  else if(ntu <= 999){Serial.print("0");Serial.print(ntu);}
+   else if(ntu <= 9999){Serial.print(ntu);}
+
+   if(tdsValue<= 9){Serial.print("00");Serial.print(tdsValue);}
+    else if(tdsValue <= 99){Serial.print("0");Serial.print(tdsValue);}
+    else if(tdsValue <= 999){Serial.print(tdsValue);}
+    
+ if(phv<= 9){Serial.print("00");Serial.print(phv);}
+    else if(phv <= 99){Serial.print("0");Serial.print(phv);}
+    else if(phv <= 999){Serial.print(phv);}
+
+      
+ if(dustDensity<= 9){Serial.print("00");Serial.print(dustDensity);}
+    else if(dustDensity <= 99){Serial.print("0");Serial.print(dustDensity);}
+    else if(dustDensity <= 999){Serial.print(dustDensity);}
+
+     if(f1<= 9){Serial.print("00");Serial.print(f1);}
+    else if(f1 <= 99){Serial.print("0");Serial.print(f1);}
+    else if(f1 <= 999){Serial.print(f1);}
+}
