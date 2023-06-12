@@ -1,0 +1,82 @@
+//pir12@gotgel.org
+#define BLYNK_PRINT Serial    
+#include <ESP8266WiFi.h>
+#include <BlynkSimpleEsp8266.h>
+
+#define BLYNK_TEMPLATE_ID "TMPLZs-mKWfy"
+#define BLYNK_TEMPLATE_NAME "WATER POLLUTION"
+#define BLYNK_AUTH_TOKEN "lMUjECvpbhBefQ-cRXxqkKzstCmHJpSc"
+// Your WiFi credentials.
+// Set password to "" for open networks.
+char ssid[] = "IOT";
+char pass[] = "123456789";
+char auth[] = BLYNK_AUTH_TOKEN;
+unsigned int m=0,act=0,val,val1,val2,val3,val4,val5;
+#define gas A0
+String inputString = ""; 
+unsigned char a[200];
+int gasv;
+void setup()
+{
+  Serial.begin(9600);
+  pinMode(gas,INPUT);
+  Blynk.begin(auth, ssid, pass, "blynk.cloud", 80);
+  
+}
+
+void loop()
+{
+  gasv=analogRead(gas);
+    Serial.print("gasv:");
+     Serial.println(gasv);
+     gasv=map(gasv,100,1024,0,99); 
+  
+   while(Serial.available())
+    {
+        char data;
+        data=Serial.read();
+  
+        a[m]=data;
+          if(a[0] == '*')
+          {
+            if(m<=16)
+            {m++;}
+          }
+      }
+      if(m > 1)
+      {
+        val = (a[1]-0x30)*1000 + (a[2]-0x30)*100  + (a[3] - 0x30)*10+(a[4] - 0x30);
+        val1 = (a[5]-0x30)*100 + (a[6]-0x30)*10  + (a[7] - 0x30);
+        val2 = (a[8]-0x30)*100 + (a[9]-0x30)*10 + (a[10] - 0x30);
+        val3 = (a[11]-0x30)*100 + (a[12]-0x30)*10  + (a[13] - 0x30);
+        val4 = (a[14]-0x30)*100 + (a[15]-0x30)*10  + (a[16] - 0x30);
+        m=0;
+      }
+     
+      Blynk.virtualWrite(V0,val);  
+      delay(100);
+      Blynk.virtualWrite(V1,val1);
+      
+      delay(100);
+      Blynk.virtualWrite(V2,val2);
+      delay(100);
+      Blynk.virtualWrite(V3,val3);
+      delay(100);
+      Blynk.virtualWrite(V4,val4);
+      delay(100);
+      if(val4==1){Blynk.virtualWrite(V6,"WATER LEVEL HIGH");}
+
+        Blynk.virtualWrite(V5,gasv);
+      delay(100);
+      if(gasv>=50){Blynk.virtualWrite(V6,"GAS LEAKED");}
+      Blynk.run();
+      sendata();
+      delay(100);
+}
+void sendata()
+{
+   Serial.print('*');
+    if(gasv<= 9){Serial.print("00");Serial.print(gasv);}
+    else if(gasv <= 99){Serial.print("0");Serial.print(gasv);}
+    else if(gasv <= 999){Serial.print(gasv);}
+}
